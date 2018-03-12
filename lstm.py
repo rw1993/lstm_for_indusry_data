@@ -2,79 +2,48 @@ import tensorflow as tf
 import tflearn
 import numpy as np
 from mfi_function import crf_layer
-from sklearn import ensemble
 import pickle
+from read_data import normalize_data
 
 batch_size = 1
 timestep = 5
 dimensions = 40
 
-CLASSIFIERS = [ensemble.AdaBoostClassifier,
-               ensemble.GradientBoostingClassifier,
-               ensemble.RandomForestClassifier]
-def loading_base_classifiers():
-    classifierss = []
-    file_path = "base_classifiers/classifier_{}_at_index_{}"
-    for C in CLASSIFIERS:
-        classifiers = []
-        for index in range(dimensions):
-            classifiers.append(pickle.load(open(file_path.format(C, index), "rb")))
-            print C, index
-        classifierss.append(classifiers)
-    return classifierss
 
-# classifierss = loading_base_classifiers()
-def generate_batch(data_set="train", begin=None):
-
+def generate_batch(data_set="train"):
     scaler = pickle.load(open("scaler", "rb"))
     current = 0
+    total = len(normalize_data)
+    train = normalize_data[: 838858]
+    test = normalize_data[838858: ]
     if data_set == "train":
-        begin = 2
-        end = 838858
-    else: 
-        begin = 838859 if begin is None else begin
-        end = 1048571
-    
+        data = train
+    else:
+        data = test
+
     while True:
         by = []
         bf = []
         bx = []
         x = []
+        index = np.random.randint(len(data))
+        x = map(lambda i: data[i],
+                [index - i for i in range(1, 6)])
+        
         f = np.zeros(shape=(dimensions, 6))
-        with open("yfj.csv", "r") as data:
-            for line in data.xreadlines():
-                if current < begin:
-                    current += 1
-                    continue
-                if current >= end:
-                    current = 0
-                    break
-                current += 1
-                attributes = line.strip().split(",")
-                feature = attributes[1:]
-                feature = scaler.transform([feature])[0]
-                if len(x) < timestep:
-                    x.append(feature)
-                else:
-                    bx.append(x)
-                    y = [0 if feature[i] < x[-1][i] else 1 for i in range(dimensions)]
-                    by.append(y)
-                    '''
-                    X = np.stack(x).reshape(-1)
-                    for c, C in enumerate(CLASSIFIERS):
-                        for i in range(dimensions):
-                            r = classifierss[c][i].predict_proba([X])
-                            f[i][c*2] = r[0][0]
-                            f[i][c*2+1] = 1.0 - r[0][0]
-                    '''
-                    bf.append(f)
-                    if len(bx) == batch_size:
-                        yield np.array(bx), np.array(by).astype(np.int32), np.array(bf)
-                        bx = []
-                        by = []
-                        bf = []
-                        f = np.zeros((dimensions, 6))
-                        x = x[1:] + [feature]
+        if len(x) < timestep:
+            continue
+        bx.append(x)
+        feature = data[index]
+        y = [0 if feature[i] < x[-1][i] else 1 for i in range(dimensions)]
+        by.append(y)
+        bf.append(f)
+        if len(bx) == batch_size:
+            yield np.array(bx), np.array(by).astype(np.int32), np.array(bf)
+            bx = []
+            by = []
+            bf = []
+            f = np.zeros((dimensions, 6))
 
 
 def main():
@@ -85,9 +54,7 @@ def main():
     net = tf.reshape(net, (batch_size, 40, 2))
     net = tf.nn.softmax(net)
     pearson = pickle.load(open("pearson_distance", "rb"))
-    def distance(i, j):
-        return pearson[(i, j)]   
-    Q = crf_layer(net, batch_size, dimensions, distance, feature_tensor)
+    Q = crf_layer(net, batch_size, dimensions, [pearson], feature_tensor)
     flag = "train"
     if flag == "train":
         label_tensor = tf.placeholder(dtype=np.int32, shape=(batch_size, dimensions))
@@ -95,7 +62,7 @@ def main():
                                                                             labels=tf.one_hot(label_tensor,
                                                                                               2)))
 
-        train_step = tf.train.AdamOptimizer(0.00001).minimize(loss_tensor)
+        train_step = tf.train.AdamOptimizer(0.000001).minimize(loss_tensor)
         init = tf.global_variables_initializer()
         tf.summary.scalar("loss", loss_tensor)
         merge_summary_op = tf.summary.merge_all()
