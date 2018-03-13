@@ -12,7 +12,6 @@ dimensions = 40
 
 
 def generate_batch(data_set="train"):
-    scaler = pickle.load(open("scaler", "rb"))
     current = 0
     total = len(normalize_data)
     train = normalize_data[: 838858]
@@ -21,12 +20,10 @@ def generate_batch(data_set="train"):
         data = train
     else:
         data = test
-
+    by = []
+    bf = []
+    bx = []
     while True:
-        by = []
-        bf = []
-        bx = []
-        x = []
         index = np.random.randint(len(data))
         x = map(lambda i: data[i],
                 [index - i for i in range(1, 6)])
@@ -44,7 +41,6 @@ def generate_batch(data_set="train"):
             bx = []
             by = []
             bf = []
-            f = np.zeros((dimensions, 6))
 
 
 def main():
@@ -76,6 +72,7 @@ def main():
             sess.run(init)
             recent_avgloss = 0.0
             saver = tf.train.Saver()
+            print "builded"
             for bx, by, bf in generate_batch():
                 _, summary_string, loss = sess.run([train_step, merge_summary_op, loss_tensor],
                                                    feed_dict={input_tensor: bx, feature_tensor: bf,
