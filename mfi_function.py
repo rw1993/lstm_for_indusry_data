@@ -18,6 +18,7 @@ def crf_layer(net, batch_size, dimensions, distances):
                     distance_index.append((d, city1))
             distance_index = sorted(distance_index)
             nearest[city0] = [i for d, i in distance_index[:near_cities]]
+        return nearest
 
     def kernel(i, j, distance):
         d = distance[(i, j)] ** 2 / 100.0 ** 2 / 2.0
@@ -37,7 +38,7 @@ def crf_layer(net, batch_size, dimensions, distances):
             for city in range(dimensions):
                 for class_ in range(2):
                     nearest  = get_nearest(distance)
-                    tensor_cache[batch][city][class_] = sum([Q[batch, c, class_]*k(c, city, batch) for c in range(dimensions) if c != city and c in nearest[city]])
+                    tensor_cache[batch][city][class_] = sum([Q[batch, c, class_]*distance[(c, city)] for c in range(dimensions) if c != city and c in nearest[city]])
         for batch in range(batch_size):
             for city in range(dimensions):
                 tensor_cache[batch][city] = tf.stack(tensor_cache[batch][city])
@@ -46,7 +47,7 @@ def crf_layer(net, batch_size, dimensions, distances):
         return tf.stack(tensor_cache)
 
     def for_a_k(distance):
-        Q2 = message_passing(k2)
+        Q2 = message_passing(distance)
         Q2_ = tflearn.layers.conv_1d(incoming=Q2, nb_filter=2,
                                      filter_size=1,
                                      reuse=tf.AUTO_REUSE, name="weight_filter2",

@@ -1,3 +1,5 @@
 yfj.csv
 scaler
 *.pyc
+lstm_log
+lstm_model

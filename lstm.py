@@ -4,8 +4,9 @@ import numpy as np
 from mfi_function import crf_layer
 import pickle
 from read_data import normalize_data
+from correlation import pearson_dict
 
-batch_size = 1
+batch_size = 2
 timestep = 5
 dimensions = 40
 
@@ -50,11 +51,14 @@ def main():
     print "building"
     input_tensor = tf.placeholder(dtype=np.float32, shape=(batch_size, timestep, dimensions))
     feature_tensor = tf.placeholder(dtype=np.float32, shape=(batch_size, dimensions, 6))
-    net = tflearn.layers.recurrent.lstm(input_tensor, n_units=80)
+    net = tflearn.layers.recurrent.lstm(input_tensor, n_units=64)
+    net = tflearn.layers.fully_connected(net, n_units=128, activation="relu")
+    net = tflearn.layers.fully_connected(net, n_units=256, activation="relu")
+    net = tflearn.layers.fully_connected(net, n_units=128, activation="relu")
+    net = tflearn.layers.fully_connected(net, n_units=80, activation="linear")
     net = tf.reshape(net, (batch_size, 40, 2))
     net = tf.nn.softmax(net)
-    pearson = pickle.load(open("pearson_distance", "rb"))
-    Q = crf_layer(net, batch_size, dimensions, [pearson], feature_tensor)
+    Q = crf_layer(net, batch_size, dimensions, [pearson_dict])
     flag = "train"
     if flag == "train":
         label_tensor = tf.placeholder(dtype=np.int32, shape=(batch_size, dimensions))
@@ -88,9 +92,8 @@ def main():
                     valid_num = 50
                     total = 0
                     acc = 0.0
-                    test_begin = np.random.randint(838859,  1048571-6000)
                     valid = 0
-                    for bx, by, bf in generate_batch('test', begin=test_begin):
+                    for bx, by, bf in generate_batch('test'):
                         q_result, = sess.run([Q,], feed_dict={input_tensor: bx, feature_tensor: bf, 
                                                    label_tensor: by})
                         valid += 1
