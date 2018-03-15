@@ -6,7 +6,7 @@ import pickle
 from read_data import normalize_data
 from correlation import pearson_dict
 
-batch_size = 8
+batch_size = 16
 timestep = 10
 dimensions = 40
 
@@ -45,27 +45,28 @@ def generate_batch(data_set="train"):
 
 def main():
     print "building"
-    input_tensor = tf.placeholder(dtype=np.float32, shape=(batch_size, timestep, dimensions))
+    input_tensor = tf.placeholder(dtype=tf.float32, shape=(batch_size, timestep, dimensions))
+    dropout_tensor = tf.placeholder(dtype=tf.float32, shape=())
     net = tflearn.layers.recurrent.lstm(input_tensor,
                                         n_units=128,
                                         activation="softsign",
                                         weights_init="xavier",
-                                        return_seq=True,
-                                        dropout=0.8)
+                                        return_seq=True)
+    net = tf.nn.dropout(net, dropout_tensor)
     net = tflearn.layers.recurrent.lstm(net,
                                         n_units=256,
                                         activation="softsign",
                                         weights_init="xavier",
-                                        return_seq=True,
-                                        dropout=0.8)
+                                        return_seq=True)
+    net = tf.nn.dropout(net, dropout_tensor)
     net = tflearn.layers.recurrent.lstm(net,
                                         n_units=128,
                                         activation="softsign",
                                         weights_init="xavier",
-                                        return_seq=False,
-                                        dropout=0.8)
-
+                                        return_seq=False)
+    net = tf.nn.dropout(net, dropout_tensor)
     net = tflearn.layers.fully_connected(net, n_units=80, activation="relu")
+    net = tf.nn.dropout(net, dropout_tensor)
     net = tf.reshape(net, (batch_size, 40, 2))
     net = tf.nn.softmax(net)
     Q = crf_layer(net, batch_size, dimensions, [pearson_dict])
@@ -82,8 +83,6 @@ def main():
         optimizer = tf.train.AdamOptimizer(1e-3)
         gradients = optimizer.compute_gradients(loss_tensor)
         cilp_gradients = [(tf.clip_by_value(g, -5.0, 5.0), v) for g, v in gradients]
-        for g, v in cilp_gradients:
-            tf.summary.histogram("{}_gradient".format(v), g)
         train_step = optimizer.apply_gradients(cilp_gradients)
         init = tf.global_variables_initializer()
         tf.summary.scalar("loss", loss_tensor)
@@ -98,6 +97,7 @@ def main():
             for bx, by, bf in generate_batch():
                 _, summary_string, loss = sess.run([train_step, merge_summary_op, loss_tensor],
                                                    feed_dict={input_tensor: bx,
+                                                        dropout_tensor: 0.8,
                                                         label_tensor: by})
                 summary_writer.add_summary(summary_string, step)
                 step += 1
@@ -115,6 +115,7 @@ def main():
                     valid = 0
                     for bx, by, bf in generate_batch('test'):
                         q_result, = sess.run([Q,], feed_dict={input_tensor: bx,
+                                                   dropout_tensor: 1.0,
                                                    label_tensor: by})
                         valid += 1
                         for b in range(batch_size):
