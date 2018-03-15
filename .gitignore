@@ -3,3 +3,4 @@ scaler
 *.pyc
 lstm_log
 lstm_model
+normalize_data

@@ -6,8 +6,8 @@ import pickle
 from read_data import normalize_data
 from correlation import pearson_dict
 
-batch_size = 2
-timestep = 5
+batch_size = 8
+timestep = 10
 dimensions = 40
 
 
@@ -26,7 +26,7 @@ def generate_batch(data_set="train"):
     while True:
         index = np.random.randint(len(data))
         x = map(lambda i: data[i],
-                [index - i for i in range(1, 6)])
+                [index - i for i in range(1, timestep+1)])
         
         f = np.zeros(shape=(dimensions, 6))
         if len(x) < timestep:
@@ -46,12 +46,26 @@ def generate_batch(data_set="train"):
 def main():
     print "building"
     input_tensor = tf.placeholder(dtype=np.float32, shape=(batch_size, timestep, dimensions))
-    feature_tensor = tf.placeholder(dtype=np.float32, shape=(batch_size, dimensions, 6))
-    net = tflearn.layers.recurrent.lstm(input_tensor, n_units=64)
-    net = tflearn.layers.fully_connected(net, n_units=128, activation="relu")
-    net = tflearn.layers.fully_connected(net, n_units=256, activation="relu")
-    net = tflearn.layers.fully_connected(net, n_units=128, activation="relu")
-    net = tflearn.layers.fully_connected(net, n_units=80, activation="linear")
+    net = tflearn.layers.recurrent.lstm(input_tensor,
+                                        n_units=128,
+                                        activation="softsign",
+                                        weights_init="xavier",
+                                        return_seq=True,
+                                        dropout=0.8)
+    net = tflearn.layers.recurrent.lstm(net,
+                                        n_units=256,
+                                        activation="softsign",
+                                        weights_init="xavier",
+                                        return_seq=True,
+                                        dropout=0.8)
+    net = tflearn.layers.recurrent.lstm(net,
+                                        n_units=128,
+                                        activation="softsign",
+                                        weights_init="xavier",
+                                        return_seq=False,
+                                        dropout=0.8)
+
+    net = tflearn.layers.fully_connected(net, n_units=80, activation="relu")
     net = tf.reshape(net, (batch_size, 40, 2))
     net = tf.nn.softmax(net)
     Q = crf_layer(net, batch_size, dimensions, [pearson_dict])
@@ -61,8 +75,16 @@ def main():
         loss_tensor = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(logits=Q,
                                                                             labels=tf.one_hot(label_tensor,
                                                                                               2)))
+        loss_tensor = loss_tensor / batch_size
+                                                                             
 
-        train_step = tf.train.AdamOptimizer(0.000001).minimize(loss_tensor)
+        # train_step = tf.train.AdamOptimizer(1e-8).minimize(loss_tensor)
+        optimizer = tf.train.AdamOptimizer(1e-3)
+        gradients = optimizer.compute_gradients(loss_tensor)
+        cilp_gradients = [(tf.clip_by_value(g, -5.0, 5.0), v) for g, v in gradients]
+        for g, v in cilp_gradients:
+            tf.summary.histogram("{}_gradient".format(v), g)
+        train_step = optimizer.apply_gradients(cilp_gradients)
         init = tf.global_variables_initializer()
         tf.summary.scalar("loss", loss_tensor)
         merge_summary_op = tf.summary.merge_all()
@@ -75,23 +97,24 @@ def main():
             print "builded"
             for bx, by, bf in generate_batch():
                 _, summary_string, loss = sess.run([train_step, merge_summary_op, loss_tensor],
-                                                   feed_dict={input_tensor: bx, feature_tensor: bf,
+                                                   feed_dict={input_tensor: bx,
                                                         label_tensor: by})
                 summary_writer.add_summary(summary_string, step)
                 step += 1
+                # print loss, step
                 recent_avgloss += loss
-                if step % 1000 == 0:
-                    print recent_avgloss / 1000.0, step
+                if step % 100 == 0:
+                    print recent_avgloss / 100.0, step
                     recent_avgloss = 0.0
                 if step % 10000 == 0:
                     saver.save(sess, "lstm_model/", global_step=step)
                     # valid
-                    valid_num = 50
+                    valid_num = 5000
                     total = 0
                     acc = 0.0
                     valid = 0
                     for bx, by, bf in generate_batch('test'):
-                        q_result, = sess.run([Q,], feed_dict={input_tensor: bx, feature_tensor: bf, 
+                        q_result, = sess.run([Q,], feed_dict={input_tensor: bx,
                                                    label_tensor: by})
                         valid += 1
                         for b in range(batch_size):

@@ -1,29 +1,38 @@
 # -*- coding: utf-8 -*-
-from sklearn.preprocessing import Normalizer
+from sklearn.preprocessing import Normalizer, MinMaxScaler, StandardScaler
 import numpy as np
+import pickle
 
-with open("yfj.csv", "r") as f:
-    lines = f.readlines()[2:]
 
-counter = 1
-def get_feature_from_line(line):
-    global counter
-    attributes = line.strip().split(",")
-    try:
-        feature = list(map(float, attributes[1:]))
-        if len(feature) != 40:
+def get_normalize_data():
+    with open("yfj.csv", "r") as f:
+        lines = f.readlines()[2:]
+
+    def get_feature_from_line(line):
+        attributes = line.strip().split(",")
+        try:
+            feature = list(map(float, attributes[1:]))
+            if len(feature) != 40:
+                return None
+        except:
             return None
-    except:
-        return None
-    print counter
-    counter += 1
-    return feature
+        return feature
 
 
-numpy_data = list(filter(lambda x: x is not None,
-                  map(get_feature_from_line, lines)))
+    numpy_data = list(filter(lambda x: x is not None,
+                      map(get_feature_from_line, lines)))
 
-numpy_data = np.array(numpy_data)
-normalizer = Normalizer()
-normalizer.fit(numpy_data)
-normalize_data = normalizer.transform(numpy_data)
+    numpy_data = np.array(numpy_data)
+    # Preprocessor = MinMaxScaler
+    Preprocessor = StandardScaler()
+    normalizer = MinMaxScaler()
+    normalizer.fit(numpy_data)
+    normalize_data = normalizer.transform(numpy_data)
+    return normalize_data
+print "getting data"
+try:
+    normalize_data = pickle.load(open("normalize_data", "rb"))
+except:
+    normalize_data = get_normalize_data()
+    pickle.dump(normalize_data, open("normalize_data", "wb"))
+print "data got"

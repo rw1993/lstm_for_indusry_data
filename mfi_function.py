@@ -24,7 +24,7 @@ def crf_layer(net, batch_size, dimensions, distances):
         d = distance[(i, j)] ** 2 / 100.0 ** 2 / 2.0
         return np.exp(-d)
 
-    def message_passing(distance):
+    def message_passing(distance, Q):
         tensor_cache = []
         for batch in range(batch_size):
             b = []
@@ -46,8 +46,8 @@ def crf_layer(net, batch_size, dimensions, distances):
             tensor_cache[batch] = tf.stack(tensor_cache[batch])
         return tf.stack(tensor_cache)
 
-    def for_a_k(distance):
-        Q2 = message_passing(distance)
+    def for_a_k(distance, Q):
+        Q2 = message_passing(distance, Q)
         Q2_ = tflearn.layers.conv_1d(incoming=Q2, nb_filter=2,
                                      filter_size=1,
                                      reuse=tf.AUTO_REUSE, name="weight_filter2",
@@ -56,6 +56,6 @@ def crf_layer(net, batch_size, dimensions, distances):
 
     MAX_ITR = 5
     for itr in range(MAX_ITR):
-        Qs = [for_a_k(distance) for distance in distances]
-        Q = tf.nn.softmax(-U-sum(Qs))
+        Qs = [for_a_k(distance,Q) for distance in distances]
+        Q = tf.nn.softmax(tf.exp(-U-sum(Qs)))
     return Q
