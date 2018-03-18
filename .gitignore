@@ -4,3 +4,5 @@ scaler
 lstm_log
 lstm_model
 normalize_data
+lstm0_log
+lstm0_model
