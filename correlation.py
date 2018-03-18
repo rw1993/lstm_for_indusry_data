@@ -16,7 +16,3 @@ pearson_dict = get_pearson()
 
 if __name__ == "__main__":
     get_pearson()
-
-
-    
-
