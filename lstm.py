@@ -6,7 +6,7 @@ import pickle
 from read_data import normalize_data
 from correlation import pearson_dict
 
-batch_size = 16
+batch_size = 4
 timestep = 10
 dimensions = 40
 
@@ -25,8 +25,8 @@ def generate_batch(data_set="train"):
     bx = []
     while True:
         index = np.random.randint(len(data))
-        x = map(lambda i: data[i],
-                [index - i for i in range(1, timestep+1)])
+        x = [e for e in map(lambda i: data[i],
+            [index - i for i in range(1, timestep+1)])]
         
         f = np.zeros(shape=(dimensions, 6))
         if len(x) < timestep:
@@ -44,7 +44,7 @@ def generate_batch(data_set="train"):
 
 
 def main():
-    print "building"
+    print("building")
     input_tensor = tf.placeholder(dtype=tf.float32, shape=(batch_size, timestep, dimensions))
     dropout_tensor = tf.placeholder(dtype=tf.float32, shape=())
     net = tflearn.layers.recurrent.lstm(input_tensor,
@@ -96,7 +96,7 @@ def main():
             recent_avgloss = 0.0
             saver = tf.train.Saver()
             former_acc = 0.0
-            print "builded"
+            print("builded")
             for bx, by, bf in generate_batch():
                 _, summary_string, loss = sess.run([train_step, merge_summary_op, loss_tensor],
                                                    feed_dict={input_tensor: bx,
@@ -109,7 +109,7 @@ def main():
                 # print loss, step
                 recent_avgloss += loss
                 if step % 100 == 0:
-                    print recent_avgloss / 100.0, step
+                    print(recent_avgloss / 100.0, step)
                     recent_avgloss = 0.0
                 if step % 10000 == 0:
                     saver.save(sess, "lstm_model/", global_step=step)
@@ -138,7 +138,7 @@ def main():
                     if float(acc) / total < former_acc:
                         learning_rate /= 10.0
                     former_acc = float(acc) / total
-                    print "valid acc is {} after step {}".format(float(acc)/total, step)
+                    print("valid acc is {} after step {}".format(float(acc)/total, step))
 
 
 if __name__ == '__main__':

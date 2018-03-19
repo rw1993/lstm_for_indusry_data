@@ -3,8 +3,8 @@ from sklearn.preprocessing import Normalizer, MinMaxScaler, StandardScaler
 import numpy as np
 import pickle
 
-def get_normalize_data():
-    with open("yfj.csv", "r", errors="ignore") as f:
+def get_normalize_data(data_path="yfj.csv"):
+    with open(data_path, "r", errors="ignore") as f:
         lines = [str(line) for line in f.readlines()][2:]
 
     def get_feature_from_line(line):

@@ -2,13 +2,11 @@ import tensorflow as tf
 import numpy as np
 import tflearn
 
-
 def crf_layer(net, batch_size, dimensions, distances):
     Q = net
     U = -tf.log(net)
-    near_cities = 5
 
-    def get_nearest(distance):
+    def get_nearest(distance, near_cities=5):
         nearest = {}
         for city0 in range(dimensions):
             distance_index = []
@@ -25,26 +23,21 @@ def crf_layer(net, batch_size, dimensions, distances):
         return np.exp(-d)
 
     def message_passing(distance, Q):
-        tensor_cache = []
-        for batch in range(batch_size):
-            b = []
-            tensor_cache.append(b)
-            for city in range(dimensions):
-                c = []
-                b.append(c)
-                for class_ in range(2):
-                    c.append(1)
-        for batch in range(batch_size):
-            for city in range(dimensions):
-                for class_ in range(2):
-                    nearest  = get_nearest(distance)
-                    tensor_cache[batch][city][class_] = sum([Q[batch, c, class_]*distance[(c, city)] for c in range(dimensions) if c != city and c in nearest[city]])
-        for batch in range(batch_size):
-            for city in range(dimensions):
-                tensor_cache[batch][city] = tf.stack(tensor_cache[batch][city])
-        for batch in range(batch_size):
-            tensor_cache[batch] = tf.stack(tensor_cache[batch])
-        return tf.stack(tensor_cache)
+        nearest = get_nearest(distance)
+
+        def message_passing_ij(i, j):
+            if j not in nearest[i]:
+                return 0.0
+            else:
+                return kernel(i, j, distance) * Q[:, j,:]
+        
+        def message_passing_i(i):
+            tensor = sum(message_passing_ij(i, j) for j in range(dimensions))
+            return tensor
+
+        tensors = [message_passing_i(i) for i in range(dimensions)]
+        return tf.stack(tensors, axis=1)
+        
 
     def for_a_k(distance, Q):
         Q2 = message_passing(distance, Q)
@@ -59,3 +52,15 @@ def crf_layer(net, batch_size, dimensions, distances):
         Qs = [for_a_k(distance,Q) for distance in distances]
         Q = tf.nn.softmax(tf.exp(-U-sum(Qs)))
     return Q
+
+def main():
+    batch_size = 4
+    dimensions = 40
+    classes = 2
+    from correlation import pearson_dict
+    Q = tf.placeholder(tf.float32, (4, 40, 2))
+    Q = crf_layer(Q, batch_size, dimensions, [pearson_dict])
+    import ipdb; ipdb.set_trace()
+
+if __name__ == '__main__':
+    main()
